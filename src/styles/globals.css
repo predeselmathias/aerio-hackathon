@@ -936,6 +936,69 @@ html[data-theme="light"] .home-facts {
   -webkit-backdrop-filter: blur(24px) saturate(160%);
   backdrop-filter: blur(24px) saturate(160%);
 }
+.weather-card {
+  width: 100%;
+}
+.weather-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.weather-city {
+  min-width: 150px;
+}
+.weather-current {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin: 18px 0 14px;
+}
+.weather-current strong {
+  font-size: 30px;
+  letter-spacing: -0.05em;
+}
+.weather-current span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.weather-hours {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.weather-chip {
+  display: grid;
+  min-width: 70px;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  padding: 8px;
+  text-align: center;
+}
+.weather-chip strong {
+  font-size: 11px;
+}
+.weather-chip small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.weather-good {
+  border-color: color-mix(in srgb, var(--green) 50%, var(--line));
+}
+.weather-caution {
+  border-color: color-mix(in srgb, var(--yellow) 50%, var(--line));
+}
+.weather-no-go {
+  border-color: color-mix(in srgb, var(--red) 50%, var(--line));
+}
+.weather-recommendation {
+  margin: 14px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+}
 .standalone-login {
   position: relative;
   z-index: 1;
