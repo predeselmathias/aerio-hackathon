@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en-GB" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Aerio — Romania drone flight planning</title>
+<meta name="description" content="Aerio helps drone pilots in Romania review airspace, plan flight areas and prepare authority request documents." />
+<meta name="theme-color" content="#eef2f8" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230A84FF'/%3E%3Cpath d='M32 14l4.6 12.4L49 31l-12.4 4.6L32 48l-4.6-12.4L15 31l12.4-4.6L32 14Z' fill='white'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body class="is-guest">
+<div class="ambient" aria-hidden="true">
+  <span class="orb orb-a"></span>
+  <span class="orb orb-b"></span>
+  <span class="orb orb-c"></span>
+  <span class="grain"></span>
+</div>
+
+<!-- ── Auth gate ───────────────────────────────────────── -->
+<section class="auth-screen" id="authScreen">
+  <div class="auth-bg" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span></div>
+  <div class="auth-card glass" role="main">
+    <aside class="auth-brand">
+      <div class="auth-logo">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3.2 14 9l5.8 2-5.8 2-2 5.8-2-5.8L4.2 11 10 9l2-5.8Z" fill="currentColor"/></svg></span>
+        <div><strong>Aerio</strong><span>Flight desk</span></div>
+      </div>
+      <h1>Your flight desk,<br />ready for take-off.</h1>
+      <p class="auth-lead">Review Romania's published UAS restrictions, plan a proposed flight area and prepare request documents in one place.</p>
+      <ul class="auth-features">
+        <li><span class="auth-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg></span><span><strong>Live traffic</strong><small>Flightradar24 when a key is set</small></span></li>
+        <li><span class="auth-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 19 6v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6l7-3Z"/><path d="m9 11.8 2.1 2.2L15.2 10"/></svg></span><span><strong>Legal by design</strong><small>Weight class vs. certificate checks</small></span></li>
+        <li><span class="auth-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 8h.01M12 11v5"/></svg></span><span><strong>Your data stays here</strong><small>Local-first, no upload, no tracker</small></span></li>
+      </ul>
+      <p class="auth-local">Prototype · no authority submissions or verified clearances · not for navigation.</p>
+    </aside>
+
+    <div class="auth-panel">
+      <div class="auth-tabs" role="tablist" aria-label="Account">
+        <button class="auth-tab is-active" type="button" data-auth-tab="signin" role="tab" aria-selected="true">Sign in</button>
+        <button class="auth-tab" type="button" data-auth-tab="signup" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <form class="auth-form" id="signinForm" novalidate>
+        <h2>Welcome back</h2>
+        <p class="auth-sub">Sign in to open your operator file.</p>
+        <label class="field"><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="alex@aerio.app" required /></label>
+        <label class="field"><span>Password</span><input type="password" name="password" autocomplete="current-password" placeholder="••••••••" required /></label>
+        <p class="auth-error" id="signinError" role="alert" hidden></p>
+        <button class="btn btn-primary auth-submit" type="submit">Sign in</button>
+        <div class="auth-divider"><span>or</span></div>
+        <button class="btn btn-ghost auth-submit" type="button" id="demoLogin">Explore the demo account</button>
+        <p class="auth-hint">Demo · <code>alex@aerio.app</code> · <code>altitude</code></p>
+      </form>
+
+      <form class="auth-form" id="signupForm" novalidate hidden>
+        <h2>Create your account</h2>
+        <p class="auth-sub">One account, all of your aircraft.</p>
+        <label class="field"><span>Full name</span><input type="text" name="name" autocomplete="name" placeholder="Alex Ionescu" required /></label>
+        <label class="field"><span>Email</span><input type="email" name="email" autocomplete="email" placeholder="you@example.com" required /></label>
+        <label class="field"><span>Password</span><input type="password" name="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required /></label>
+        <p class="auth-error" id="signupError" role="alert" hidden></p>
+        <button class="btn btn-primary auth-submit" type="submit">Create account</button>
+        <p class="auth-hint">Local-only prototype. Your account and data stay in this browser.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<div class="shell">
+  <!-- ── Sidebar ─────────────────────────────────────────── -->
+  <aside class="sidebar glass" aria-label="Primary">
+    <button class="brand" data-go="today" aria-label="Aerio home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.2 14 9l5.8 2-5.8 2-2 5.8-2-5.8L4.2 11 10 9l2-5.8Z" fill="currentColor"/></svg>
+      </span>
+      <span class="brand-text">
+        <strong>Aerio</strong>
+        <small>Flight desk</small>
+      </span>
+    </button>
+
+    <nav class="nav" id="mainNav">
+      <button class="nav-item is-active" data-go="today">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>
+        <span>Today</span>
+      </button>
+      <button class="nav-item" data-go="airspace">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>
+        <span>Airspace</span>
+      </button>
+      <button class="nav-item" data-go="authorize">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6l7-3Z"/><path d="m9 11.8 2.1 2.2L15.2 10"/></svg>
+        <span>Flight request</span>
+        <span class="nav-badge" id="authBadge" hidden>1</span>
+      </button>
+      <button class="nav-item" data-go="profile">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9.2" cy="11" r="2.1"/><path d="M6.4 16c.5-1.7 1.6-2.6 2.8-2.6s2.3.9 2.8 2.6M14 9.5h3.4M14 13h3.4"/></svg>
+        <span>Profile</span>
+      </button>
+      <button class="nav-item" data-go="learn">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.6A2.6 2.6 0 0 1 6.6 3H20v15H6.6A2.6 2.6 0 0 0 4 20.6V5.6Z"/><path d="M8.5 7h7M8.5 10.5h5"/></svg>
+        <span>Learn</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-note">
+      <p class="note-kicker">Today in Bucharest</p>
+      <p class="note-weather">21° <span>Clear</span></p>
+      <div class="note-metrics">
+        <span>Wind 3 m/s</span>
+        <span>Vis 10 km</span>
+      </div>
+      <p class="note-meta">Example data · local-only planning</p>
+    </div>
+
+    <div class="sidebar-foot">
+      <button class="profile profile-btn" type="button" data-go="profile" aria-label="Open operator profile">
+        <div class="avatar" id="profileAvatar">AI</div>
+        <div class="profile-text">
+          <strong id="profileName">Alex Ionescu</strong>
+          <span id="profileId">ROA-2026-118704</span>
+        </div>
+        <svg class="ico profile-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+      <div class="foot-row">
+        <button class="icon-btn theme-toggle" id="themeBtn" title="Switch appearance" aria-label="Switch appearance">
+          <svg class="ico sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+          <svg class="ico moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+          <span class="theme-label">White theme</span>
+        </button>
+        <button class="btn btn-quiet btn-sm" id="tourBtn">Guided tour</button>
+        <button class="icon-btn" id="logoutBtn" title="Sign out" aria-label="Sign out">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4.5H6.5A2.5 2.5 0 0 0 4 7v10a2.5 2.5 0 0 0 2.5 2.5H14"/><path d="M10 12h10m0 0-3.5-3.5M20 12l-3.5 3.5"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────────────── -->
+  <main class="main">
+    <div class="content" id="content">
+
+      <header class="topbar">
+        <div class="topbar-inner">
+          <div class="page-head">
+            <p class="eyebrow" id="pageEyebrow">Friday, 30 October</p>
+            <h1 id="pageTitle">Today</h1>
+          </div>
+          <div class="topbar-right">
+            <span class="pill pill-quiet" id="airspacePill"><span class="dot"></span>Demo · not clearance</span>
+            <button class="btn btn-quiet btn-sm theme-toggle topbar-theme" data-theme-toggle title="Switch appearance" aria-label="Switch appearance">
+              <svg class="ico sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg>
+              <svg class="ico moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+              <span class="theme-label">White theme</span>
+            </button>
+            <button class="btn btn-quiet btn-sm language-toggle" id="languageBtn" type="button" aria-label="Switch to Romanian" title="Switch language">RO</button>
+            <button class="avatar avatar-sm topbar-avatar" id="topbarAvatar" type="button" data-go="profile" aria-label="Open operator profile">AI</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="views">
+
+        <!-- ── TODAY ─────────────────────────────────────── -->
+        <section class="view" id="view-today" data-view="today">
+          <article class="card hero assistant">
+            <div class="hero-glow" aria-hidden="true"></div>
+            <header class="hero-head">
+              <div class="spark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 14 9l6.2 2-6.2 2-2 6.2-2-6.2L3.8 11 10 9l2-6.2Z" fill="currentColor"/><path d="M19 17.4 19.9 20l2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6Z" fill="currentColor" opacity=".55"/></svg>
+              </div>
+              <div class="hero-headtext">
+                <p class="eyebrow">Romania drone planning</p>
+                <h2 class="display" id="greeting">Good afternoon, Alex</h2>
+              </div>
+              <span class="pill pill-quiet"><span class="dot"></span>Planning only</span>
+            </header>
+
+            <p class="hero-copy" id="aiCopy" aria-live="polite"></p>
+
+            <div class="windows" id="windows" aria-label="Example time windows; not live availability"></div>
+
+            <div class="hero-actions">
+              <button class="btn btn-primary" data-go="airspace">
+                Open airspace map
+                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+              </button>
+              <button class="btn btn-ghost" data-go="authorize">Request a slot</button>
+              <span class="hero-stamp" id="heroStamp">Updated just now</span>
+            </div>
+          </article>
+
+          <div class="stat-row">
+            <div class="card stat">
+              <div class="stat-top">
+                <span class="stat-label">Example time window</span>
+                <span class="stat-ico blue"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg></span>
+              </div>
+              <p class="stat-value" id="statWindow">13:00 — 15:00</p>
+              <p class="stat-sub" id="statCountdown">Opens in 1h 24m</p>
+            </div>
+            <div class="card stat">
+              <div class="stat-top">
+                <span class="stat-label">Demo zone models</span>
+                <span class="stat-ico green"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="m8.5 12.6 2 2 4-4.4"/></svg></span>
+              </div>
+              <p class="stat-value" id="statZones">3 of 7</p>
+              <p class="stat-sub">Illustrative, not official zones</p>
+            </div>
+            <div class="card stat">
+              <div class="stat-top">
+                <span class="stat-label">Clearance</span>
+                <span class="stat-ico amber"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6l7-3Z"/><path d="M12 9v3.4M12 15.6h.01"/></svg></span>
+              </div>
+              <p class="stat-value" id="statClearance">Not requested</p>
+              <p class="stat-sub" id="statClearanceSub">Prepare a local request package</p>
+            </div>
+          </div>
+
+          <section class="card profile-nudge" id="profileNudge" hidden>
+            <div class="nudge-main">
+              <span class="nudge-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9.2" cy="11" r="2.1"/><path d="M6.4 16c.5-1.7 1.6-2.6 2.8-2.6s2.3.9 2.8 2.6M14 9.5h3.4M14 13h3.4"/></svg>
+              </span>
+              <div>
+                <h3 class="card-title" id="nudgeTitle">Finish your operator file</h3>
+                <p class="card-sub" id="nudgeCopy">Add your operator ID and a drone so requests can be filed.</p>
+              </div>
+            </div>
+            <div class="nudge-actions">
+              <button class="btn btn-primary btn-sm" type="button" data-go="profile">Complete profile</button>
+              <span class="pill pill-quiet" id="nudgePct">0%</span>
+            </div>
+          </section>
+
+          <div class="split">
+            <section class="card">
+              <header class="card-head">
+                <div>
+                  <h3 class="card-title">Example locations</h3>
+                  <p class="card-sub">Illustrative only · check the exact area</p>
+                </div>
+                <button class="btn btn-quiet btn-sm" data-go="airspace">All zones</button>
+              </header>
+              <div class="rec-list" id="recList"></div>
+            </section>
+
+            <section class="card">
+              <header class="card-head">
+                <div>
+                  <h3 class="card-title">Before you take off</h3>
+                  <p class="card-sub">A quiet five-point check</p>
+                </div>
+                <span class="badge" id="checkCount">0 / 5</span>
+              </header>
+              <ul class="checklist" id="checklist"></ul>
+              <div class="progress-track" aria-hidden="true"><span id="checkBar" style="width:0%"></span></div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ── AIRSPACE ──────────────────────────────────── -->
+        <section class="view" id="view-airspace" data-view="airspace" hidden>
+          <div class="map-layout">
+            <div class="card map-card">
+              <div class="map-toolbar">
+                <div class="map-tools">
+                  <button class="btn btn-primary btn-sm" id="drawAreaBtn" type="button">Draw flight area</button>
+                  <button class="btn btn-quiet btn-sm" id="undoAreaPoint" type="button" disabled>Undo point</button>
+                  <button class="btn btn-quiet btn-sm" id="finishFlightArea" type="button" hidden>Close polygon</button>
+                  <button class="btn btn-quiet btn-sm" id="clearFlightArea" type="button" hidden>Clear</button>
+                  <span class="draw-status" id="drawAreaStatus" aria-live="polite">Draw at least 3 points to outline your proposed area.</span>
+                </div>
+                <div class="map-toolbar-layers">
+                  <div class="segmented" role="group" aria-label="Map layers">
+                  <button class="seg" data-layer="romatsa" aria-pressed="true">ROMATSA zones</button>
+                  <button class="seg" data-layer="satellite" aria-pressed="false">Aerial imagery</button>
+                  <button class="seg" data-layer="airspace" aria-pressed="false">Demo zones</button>
+                  <button class="seg" data-layer="traffic" aria-pressed="true">Traffic</button>
+                  </div>
+                  <a class="map-source-link" href="https://aerofoto.mapn.ro/" target="_blank" rel="noopener noreferrer">MAPN AEROFOTO ↗</a>
+                </div>
+              </div>
+              <div class="map-source-row">
+                <p class="map-source-note" id="romatsaStatus">ROMATSA official UAS restricted zones · not a complete airspace clearance.</p>
+                <label class="opacity-control" id="aerialOpacityControl" hidden>
+                  <span>Aerial opacity</span>
+                  <input id="aerialOpacity" type="range" min="0" max="100" value="72" aria-label="Aerial imagery opacity" />
+                </label>
+              </div>
+
+              <div class="map-frame" id="mapFrame">
+                <div id="map" class="leaflet-map" role="application" aria-label="Interactive map of Romania with ROMATSA restricted zones and optional aircraft traffic"></div>
+                <button class="zoom-btn map-locate" id="mapLocate" title="Go to my location" aria-label="Go to my location">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M12 3v3.2M12 17.8V21M3 12h3.2M17.8 12H21"/></svg>
+                </button>
+                <div class="map-badge glass">
+                  <span class="dot" id="mapBadgeDot"></span>
+                  <div>
+                    <strong id="mapBadgeTitle">Parcul Herăstrău</strong>
+                    <small id="mapBadgeSub">Open · 120 m AGL</small>
+                  </div>
+                </div>
+                <button class="map-traffic glass" id="trafficPill" type="button" aria-label="Live traffic status and refresh">
+                  <span class="live-dot"></span>
+                  <span class="traffic-text"><strong id="trafficCount">0 aircraft</strong><small id="trafficSource">Demo feed</small></span>
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+                </button>
+                <div class="map-legend glass" id="mapLegend" aria-hidden="true" hidden>
+                  <span><i class="lg lg-open"></i>Demo open</span>
+                  <span><i class="lg lg-advisory"></i>Advisory</span>
+                  <span><i class="lg lg-restricted"></i>Restricted</span>
+                </div>
+                <div class="map-zoom">
+                  <button class="zoom-btn" id="zoomIn" aria-label="Zoom in">+</button>
+                  <button class="zoom-btn" id="zoomOut" aria-label="Zoom out">−</button>
+                </div>
+              </div>
+            </div>
+
+            <aside class="map-side">
+              <div class="card zone-detail" id="zoneDetail"></div>
+              <div class="card zone-list-card">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Bucharest demo zones</h3>
+                    <p class="card-sub">Illustrative only · tap to inspect</p>
+                  </div>
+                </header>
+                <ul class="zone-list" id="zoneList"></ul>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ── AUTHORIZE ─────────────────────────────────── -->
+        <section class="view" id="view-authorize" data-view="authorize" hidden>
+          <div class="auth-layout">
+            <div class="stack">
+              <form class="card form-card" id="authForm" novalidate>
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Plan a flight request</h3>
+                    <p class="card-sub">Draw the area first, then choose aircraft and a candidate time.</p>
+                  </div>
+                  <span class="pill pill-quiet" id="formZonePill">Zone G</span>
+                </header>
+
+                <section class="flight-area-summary" aria-live="polite">
+                  <div>
+                    <strong id="requestAreaTitle">Flight area not selected</strong>
+                    <p id="requestAreaDetails">Draw at least 3 points on the Romania map and close the polygon.</p>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" type="button" id="chooseFlightArea">Choose on map</button>
+                  <button class="btn btn-quiet btn-sm" type="button" id="fillRecommended">Use sample area</button>
+                </section>
+                <div class="area-rules" id="areaRules" hidden></div>
+
+                <div class="form-grid">
+                  <label class="field field-wide">
+                    <span>Bucharest demo zone reference (not official)</span>
+                    <select name="zone" id="formZone"></select>
+                  </label>
+                  <label class="field">
+                    <span>Date</span>
+                    <input type="date" name="date" id="formDate" required />
+                  </label>
+                  <label class="field">
+                    <span>Flight duration</span>
+                    <select id="flightDuration" name="duration">
+                      <option value="30">30 minutes</option>
+                      <option value="60" selected>60 minutes</option>
+                      <option value="90">90 minutes</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>Purpose</span>
+                    <select name="purpose">
+                      <option>Photography</option>
+                      <option>Filming</option>
+                      <option>Cartography</option>
+                      <option>Freestyle practice</option>
+                      <option>Inspection</option>
+                      <option>Training flight</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>From</span>
+                    <input type="time" name="from" id="formFrom" value="13:00" required />
+                  </label>
+                  <label class="field">
+                    <span>To</span>
+                    <input type="time" name="to" id="formTo" value="14:00" required />
+                  </label>
+                  <label class="field">
+                    <span>Max altitude (m AGL)</span>
+                    <input type="number" name="altitude" value="120" min="5" max="120" step="5" />
+                  </label>
+                  <div class="field field-wide schedule-field">
+                    <span>Candidate times</span>
+                    <p class="card-sub" id="scheduleDisclaimer">Select an area and date. Conflicts check only requests saved in this browser—not live or shared bookings.</p>
+                    <div class="candidate-slots" id="candidateSlots" aria-live="polite"></div>
+                  </div>
+                  <div class="field field-wide drone-field">
+                    <div class="drone-field-head">
+                      <span>Drones on this flight</span>
+                      <button class="link-btn" type="button" data-go="profile">Manage drones</button>
+                    </div>
+                    <div class="drone-picker" id="dronePicker" role="group" aria-label="Select drones for this flight"></div>
+                  </div>
+                  <div class="cert-warning" id="certWarning" hidden role="alert"></div>
+                  <label class="field field-wide">
+                    <span>Note for the authority <em>(optional)</em></span>
+                    <textarea name="note" rows="2" placeholder="Visual observer on site, no people below flight path."></textarea>
+                  </label>
+                </div>
+
+                <label class="switch-row">
+                  <input type="checkbox" name="ack" id="formAck" />
+                  <span class="switch-box" aria-hidden="true"></span>
+                  <span>I have checked the applicable airspace rules and confirm these request details are accurate. This planner does not grant permission to fly.</span>
+                </label>
+
+                <div class="form-actions">
+                  <button class="btn btn-primary" type="submit" id="submitAuth">
+                    Prepare request
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12 20 4l-4 16-3.6-6.2L4.5 12Z"/><path d="m12.4 13.8 3.2-3.4"/></svg>
+                  </button>
+                </div>
+                <p class="form-foot">This app cannot submit a flight plan or authority application. It prepares documents and an email draft for you to review and send.</p>
+              </form>
+
+              <section class="card legal">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Legal prerequisites</h3>
+                    <p class="card-sub">Check the requirements for your exact area, category and activity.</p>
+                  </div>
+                  <span class="pill pill-quiet" id="legalPill">Check</span>
+                </header>
+                <ul class="legal-checks" id="legalChecks"></ul>
+                <div class="legal-actions">
+                  <a class="btn btn-ghost btn-sm" href="https://aerofoto.mapn.ro/" target="_blank" rel="noopener">
+                    Open Mapn portal
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></svg>
+                  </a>
+                  <a class="btn btn-quiet btn-sm" href="https://aerofoto.mapn.ro/Help/Legislatie" target="_blank" rel="noopener">Legislation</a>
+                </div>
+                <p class="form-foot">Open-category drone filming/photography outside restricted UAS zones does not require the MApN photo/video approval described on the official site. Restricted zones with aerofoto@mapn.ro as contact do. Verify every requirement on the official sources.</p>
+              </section>
+            </div>
+
+            <div class="stack">
+              <section class="card submission" id="submissionCard" aria-live="polite">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Request package</h3>
+                    <p class="card-sub" id="submissionSub">No package prepared</p>
+                  </div>
+                  <span class="pill pill-quiet" id="submissionPill">Idle</span>
+                </header>
+                <div id="submissionBody"></div>
+              </section>
+
+              <section class="card tips">
+                <h3 class="card-title">Before you fly</h3>
+                <ol class="steps-mini">
+                  <li><span>1</span><p><strong>Draw.</strong> Mark the proposed area. The map highlights intersecting published ROMATSA zones.</p></li>
+                  <li><span>2</span><p><strong>Plan.</strong> Select aircraft, date and a candidate time; saved local requests are checked for conflicts.</p></li>
+                  <li><span>3</span><p><strong>Prepare.</strong> Download the filled summary and area coordinates; review the authority's official form and attachments.</p></li>
+                  <li><span>4</span><p><strong>Send and confirm.</strong> Send from your email app, wait for written approval, then record its reference here before reserving the map area.</p></li>
+                </ol>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── PROFILE ───────────────────────────────────── -->
+        <section class="view" id="view-profile" data-view="profile" hidden>
+          <div class="profile-layout">
+            <div class="stack">
+              <section class="card profile-hero">
+                <div class="avatar profile-avatar" id="profileAvatarBig">AI</div>
+                <div class="profile-identity">
+                  <p class="eyebrow">Operator file</p>
+                  <h2 class="profile-name" id="profileNameBig">Alex Ionescu</h2>
+                  <p class="profile-mail" id="profileEmail">alex@aerio.app</p>
+                  <div class="profile-tags" id="profileTags"></div>
+                </div>
+                <div class="profile-score">
+                  <div class="ring" id="profileRing" style="--p:0"><span id="profileRingValue">0%</span></div>
+                  <small>Complete</small>
+                </div>
+              </section>
+
+              <section class="card">
+                <header class="card-head">
+                  <div class="head-with-ico">
+                    <span class="hook-ico green"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.7-3.8 3.8-6 7.5-6s6.8 2.2 7.5 6"/></svg></span>
+                    <div>
+                      <h3 class="card-title">Operator &amp; insurance</h3>
+                      <p class="card-sub">Required on every authorization</p>
+                    </div>
+                  </div>
+                  <span class="pill pill-quiet" id="operatorPill">Incomplete</span>
+                </header>
+                <form id="operatorForm" class="form-grid" autocomplete="off" novalidate>
+                  <label class="field field-wide"><span>Full name</span><input name="name" placeholder="Alex Ionescu" /></label>
+                  <label class="field"><span>Operator ID</span><input name="operatorId" placeholder="ROA-2026-118704" /></label>
+                  <label class="field"><span>CAA registration no.</span><input name="registration" placeholder="ROUAS-2026-0042" /></label>
+                  <label class="field"><span>Insurance policy</span><input name="insurance" placeholder="EU-DRONE-8841" /></label>
+                  <label class="field"><span>Insurance valid until</span><input type="date" name="insuranceUntil" /></label>
+                  <label class="field"><span>Phone</span><input type="tel" name="phone" placeholder="+40 721 000 000" /></label>
+                  <label class="field"><span>Contact email</span><input type="email" name="email" placeholder="alex@example.com" /></label>
+                  <label class="field field-wide"><span>Address</span><input name="address" placeholder="Sector 1, Bucharest" /></label>
+                  <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">Save operator details</button>
+                    <span class="form-foot">Stored on this device.</span>
+                  </div>
+                </form>
+              </section>
+
+              <section class="card">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Certificates</h3>
+                    <p class="card-sub">Weight decides which one you need</p>
+                  </div>
+                  <span class="pill pill-quiet" id="certPill">None</span>
+                </header>
+                <div id="certList" class="cert-list"></div>
+                <p class="secure-note">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8h.01M12 11v5"/></svg>
+                  A1/A3 is an online test that covers A1 and A3. The A2 exam is required for C2 drones between 900 g and 4 kg.
+                </p>
+              </section>
+
+              <section class="card legal">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Legal &amp; documents</h3>
+                    <p class="card-sub">Romanian and EU references</p>
+                  </div>
+                  <span class="pill pill-quiet">External</span>
+                </header>
+                <ul class="legal-links" id="legalLinks"></ul>
+                <p class="form-foot">Links open the official portals. This prototype is not legal advice and is not connected to CAA, ROMATSA or Mapn.</p>
+              </section>
+            </div>
+
+            <div class="stack">
+              <section class="card">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Your drones</h3>
+                    <p class="card-sub" id="droneSummary">0 aircraft</p>
+                  </div>
+                  <button class="btn btn-primary btn-sm" id="addDrone" type="button">
+                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    Add drone
+                  </button>
+                </header>
+                <div class="drone-list" id="droneList"></div>
+              </section>
+
+              <section class="card">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Live traffic</h3>
+                    <p class="card-sub">Flightradar24 API connection</p>
+                  </div>
+                  <span class="pill pill-quiet" id="fr24Pill">Demo feed</span>
+                </header>
+                <form id="fr24Form" class="fr24-form" autocomplete="off">
+                  <label class="field"><span>API key</span><input type="password" name="token" id="fr24Token" placeholder="Paste your Flightradar24 API key" autocomplete="off" /></label>
+                  <div class="form-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" id="testFr24">Test connection</button>
+                    <button class="btn btn-primary btn-sm" type="submit">Save key</button>
+                  </div>
+                </form>
+                <p class="secure-note">
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8.5 10V7.8a3.5 3.5 0 0 1 7 0V10"/></svg>
+                  The key stays in this browser and is sent directly to <code>fr24api.flightradar24.com</code>. Without a key the map uses a clearly labelled demo feed.
+                </p>
+                <a class="link-out" href="https://fr24api.flightradar24.com/" target="_blank" rel="noopener">Get a Flightradar24 API key
+                  <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></svg>
+                </a>
+              </section>
+
+              <section class="card account-card">
+                <header class="card-head">
+                  <div>
+                    <h3 class="card-title">Account</h3>
+                    <p class="card-sub">Local-first, no server</p>
+                  </div>
+                  <span class="pill pill-quiet">Private</span>
+                </header>
+                <dl class="account-facts">
+                  <div><dt>Email</dt><dd id="accountEmail">—</dd></div>
+                  <div><dt>Member since</dt><dd id="accountSince">—</dd></div>
+                </dl>
+                <div class="account-actions">
+                  <button class="btn btn-ghost btn-sm" id="exportProfile" type="button">Export JSON</button>
+                  <button class="btn btn-quiet btn-sm" id="signOut" type="button">Sign out</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <!-- ── LEARN ─────────────────────────────────────── -->
+        <section class="view" id="view-learn" data-view="learn" hidden>
+          <section class="card learn-head">
+            <div class="ring-wrap">
+              <div class="ring" id="learnRing" style="--p:0"><span id="learnRingValue">0%</span></div>
+              <div>
+                <p class="eyebrow">Training path</p>
+                <h2 class="learn-title">From first flight to licensed pilot</h2>
+                <p class="card-sub" id="learnSub">Four short modules, written for beginners.</p>
+              </div>
+            </div>
+            <div class="learn-actions">
+              <button class="btn btn-primary" id="continueLearning">Continue learning</button>
+              <button class="btn btn-ghost" id="mockExamJump">Mock exam</button>
+            </div>
+          </section>
+
+          <div class="module-grid" id="moduleGrid"></div>
+
+          <section class="card exam-card" id="examCard">
+            <header class="card-head">
+              <div>
+                <h3 class="card-title">A1 / A3 mock exam</h3>
+                <p class="card-sub">Three questions from the official-style question bank</p>
+              </div>
+              <span class="pill pill-quiet" id="examPill">Not started</span>
+            </header>
+            <div id="examBody"></div>
+          </section>
+        </section>
+
+      </div>
+
+      <footer class="page-foot">
+        <span>Aerio · hackathon build</span>
+        <span>ROMATSA zones are a bundled snapshot; NOTAM checks and authority responses are not connected.</span>
+      </footer>
+    </div>
+  </main>
+</div>
+
+<!-- ── Mobile tab bar ──────────────────────────────────── -->
+<nav class="tabbar glass" aria-label="Primary mobile">
+  <button class="tab is-active" data-go="today">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg>
+    <span>Today</span>
+  </button>
+  <button class="tab" data-go="airspace">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>
+    <span>Map</span>
+  </button>
+  <button class="tab" data-go="authorize">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 19 6v6c0 4.2-3 7.4-7 9-4-1.6-7-4.8-7-9V6l7-3Z"/><path d="m9 11.8 2.1 2.2L15.2 10"/></svg>
+    <span>Request</span>
+  </button>
+  <button class="tab" data-go="profile">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9.2" cy="11" r="2.1"/><path d="M6.4 16c.5-1.7 1.6-2.6 2.8-2.6s2.3.9 2.8 2.6M14 9.5h3.4M14 13h3.4"/></svg>
+    <span>Profile</span>
+  </button>
+  <button class="tab" data-go="learn">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.6A2.6 2.6 0 0 1 6.6 3H20v15H6.6A2.6 2.6 0 0 0 4 20.6V5.6Z"/><path d="M8.5 7h7M8.5 10.5h5"/></svg>
+    <span>Learn</span>
+  </button>
+</nav>
+
+<!-- ── Overlays ────────────────────────────────────────── -->
+<div class="overlay" id="onboarding" hidden>
+  <div class="onboard glass" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+    <div class="onboard-visual" id="obVisual" aria-hidden="true"></div>
+    <p class="eyebrow" id="obStep">Step 1 of 3</p>
+    <h2 class="onboard-title" id="obTitle">Welcome to Aerio</h2>
+    <p class="onboard-copy" id="obCopy"></p>
+    <div class="onboard-actions">
+      <button class="btn btn-quiet" id="obSkip">Skip</button>
+      <button class="btn btn-primary" id="obNext">Continue</button>
+    </div>
+    <div class="dots" id="obDots" aria-hidden="true"></div>
+  </div>
+</div>
+
+<div class="overlay" id="sheetOverlay" hidden>
+  <div class="sheet glass" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <header class="sheet-head">
+      <div>
+        <p class="eyebrow" id="sheetKicker">Module</p>
+        <h2 id="sheetTitle">Title</h2>
+      </div>
+      <button class="icon-btn" id="sheetClose" aria-label="Close">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+      </button>
+    </header>
+    <div class="sheet-body" id="sheetBody"></div>
+    <footer class="sheet-foot" id="sheetFoot"></footer>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="true"></div>
+
+<noscript>
+  <div class="noscript">Aerio needs JavaScript for the map and flight-planning flow.</div>
+</noscript>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="js/data.js"></script>
+<script src="js/session.js"></script>
+<script src="js/core.js"></script>
+<script src="js/language.js"></script>
+<script src="js/today.js"></script>
+<script src="js/map.js"></script>
+<script src="js/authorize.js"></script>
+<script src="js/flight-planner.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/learn.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>

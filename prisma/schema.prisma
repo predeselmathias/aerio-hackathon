@@ -1,0 +1,25 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model FlightPlan {
+  id         String   @id @default(cuid())
+  flightDate String
+  startTime  String
+  endTime    String
+  area       String
+  drone      String
+  purpose    String
+  createdAt  DateTime @default(now())
+
+  @@index([flightDate])
+}
