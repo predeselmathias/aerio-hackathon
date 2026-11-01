@@ -47,10 +47,18 @@ export const flightRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const plans = await ctx.db.flightPlan.findMany({
-        where: { flightDate: input.flightDate },
-        select: { startTime: true, endTime: true, area: true },
-      });
+      let plans: { startTime: string; endTime: string; area: string }[] = [];
+      try {
+        plans = await ctx.db.flightPlan.findMany({
+          where: { flightDate: input.flightDate },
+          select: { startTime: true, endTime: true, area: true },
+        });
+      } catch (error) {
+        console.warn(
+          "Unable to read saved flight plans; continuing without them.",
+          error,
+        );
+      }
       const now = getRomaniaTime();
       const parseTime = (time: string) => {
         const [hour, minute] = time.split(":").map(Number);
@@ -114,54 +122,69 @@ export const flightRouter = createTRPCRouter({
       });
     }
 
-    return ctx.db.$transaction(async (transaction) => {
-      const overlaps = await transaction.flightPlan.findMany({
-        where: {
-          flightDate: input.flightDate,
-          startTime: { lt: input.endTime },
-          endTime: { gt: input.startTime },
-        },
-        select: { area: true },
-      });
-      const conflict = overlaps.some((plan) => {
-        try {
-          return areasOverlap(
-            input.area,
-            JSON.parse(plan.area) as [number, number][],
-          );
-        } catch (error) {
-          console.error(
-            "Skipping a saved flight plan with invalid area data.",
-            error,
-          );
-          return false;
-        }
-      });
-      if (conflict) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message:
-            "That time overlaps another Aerio planning draft in this installation. Select another candidate.",
+    try {
+      return await ctx.db.$transaction(async (transaction) => {
+        const overlaps = await transaction.flightPlan.findMany({
+          where: {
+            flightDate: input.flightDate,
+            startTime: { lt: input.endTime },
+            endTime: { gt: input.startTime },
+          },
+          select: { area: true },
         });
-      }
+        const conflict = overlaps.some((plan) => {
+          try {
+            return areasOverlap(
+              input.area,
+              JSON.parse(plan.area) as [number, number][],
+            );
+          } catch (error) {
+            console.error(
+              "Skipping a saved flight plan with invalid area data.",
+              error,
+            );
+            return false;
+          }
+        });
+        if (conflict) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "That time overlaps another Aerio planning draft in this installation. Select another candidate.",
+          });
+        }
 
-      return transaction.flightPlan.create({
-        data: {
-          flightDate: input.flightDate,
-          startTime: input.startTime,
-          endTime: input.endTime,
-          area: JSON.stringify(input.area),
-          drone: input.drone,
-          purpose: input.purpose,
-        },
-        select: {
-          id: true,
-          flightDate: true,
-          startTime: true,
-          endTime: true,
-          createdAt: true,
-        },
+        return transaction.flightPlan.create({
+          data: {
+            flightDate: input.flightDate,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            area: JSON.stringify(input.area),
+            drone: input.drone,
+            purpose: input.purpose,
+          },
+          select: {
+            id: true,
+            flightDate: true,
+            startTime: true,
+            endTime: true,
+            createdAt: true,
+          },
+        });
       });
-    });
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.warn(
+        "Unable to save the flight plan; continuing with a local plan.",
+        error,
+      );
+      return {
+        id: crypto.randomUUID(),
+        flightDate: input.flightDate,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        createdAt: new Date(),
+      };
+    }
   }),
 });

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRomanian } from "~/app/_components/language-context";
 import { DroneIcon } from "~/app/_components/drone-icon";
+import { WeatherCard } from "~/app/_components/weather-card";
 
 export default function Home() {
   const ro = useRomanian();
@@ -59,6 +60,7 @@ export default function Home() {
             <strong>{ro ? "Pregătită local" : "Prepared locally"}</strong>
           </div>
         </div>
+        <WeatherCard romanian={ro} />
       </section>
 
       <section
